@@ -1,5 +1,6 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { BiSearch } from "react-icons/bi";
+import supabase from "../../supabaseClient";
 import Dropdown from "./Dropdown";
 
 const BookList = () => {
@@ -9,6 +10,29 @@ const BookList = () => {
   const [title, setTitle] = useState("");
   const [author, setAuthor] = useState("");
   const [category, setCategory] = useState("");
+  const [bookData, setBookData] = useState([]);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState("All");
+  const categories = [
+    "History and Geography",
+    "Literature",
+    "Psychology and Philosophy",
+    "Natural Sciences"
+  ];
+
+  useEffect(() => {
+    fetchBooks();
+  }, []);
+
+  const fetchBooks = async () => {
+    try {
+      const { data, error } = await supabase.from("books").select("*");
+      if (error) throw error;
+      setBookData(data);
+    } catch (error) {
+      console.error("Error fetching books:", error.message);
+    }
+  };
 
   const handleOpenModal = () => {
     setShowModal(true);
@@ -19,83 +43,26 @@ const BookList = () => {
     resetForm();
   };
 
-  const handleCreateBook = () => {
-    const newBook = {
-      BookNumber: bookNumber,
-      Title: title,
-      Author: author,
-      Category: category,
-      Status: "Available",
-    };
-
-    // Add the new book to the list
-    setBookData([...bookData, newBook]);
-
-    // Reset form fields and close modal
-    handleCloseModal();
+  const handleCreateBook = async () => {
+    try {
+      const { data, error } = await supabase.from("books").insert([
+        {
+          ddcid: bookNumber,
+          title: title,
+          category: category,
+          status: true,
+          author: author,
+        },
+      ]);
+      if (error) throw error;
+      setBookData([...bookData, data[0]]);
+      handleCloseModal(); 
+      await fetchBooks();
+    } catch (error) {
+      console.error("Error adding book:", error.message);
+    }
   };
-  // Modal end
-
-  // Dropdown category and search
-  const [searchQuery, setSearchQuery] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState("All");
-
-  // Category data
-  const categories = [
-    "All",
-    "History and Geography",
-    "Literature",
-    "Psychology and Philosophy",
-    "Natural Sciences",
-  ];
-
-  // Sample data
-  const [bookData, setBookData] = useState([
-    {
-      BookNumber: 909,
-      Title: "Sapiens: A Brief History of Humankind",
-      Author: "Yuval Noah Harari",
-      Category: "History and Geography",
-      Status: "Available",
-    },
-    {
-      BookNumber: 813.5,
-      Title: "To Kill a Mockingbird",
-      Author: "Harper Lee",
-      Category: "Literature",
-      Status: "Available",
-    },
-    {
-      BookNumber: 158.1,
-      Title: "The Power of Habit: Why We Do What We Do in Life and Business",
-      Author: "Charles Duhigg",
-      Category: "Psychology and Philosophy",
-      Status: "Not Available",
-    },
-    {
-      BookNumber: 813.54,
-      Title: "The Da Vinci Code",
-      Author: "Dan Brown",
-      Category: "Literature",
-      Status: "Not Available",
-    },
-    {
-      BookNumber: 576.8,
-      Title: "The Origin of Species",
-      Author: "Charles Darwin",
-      Category: "Natural Sciences",
-      Status: "Available",
-    },
-  ]);
-
-  // Dropdown category and search
-  const filteredData = bookData.filter((item) =>
-    selectedCategory === "All" || item.Category === selectedCategory
-      ? item.Title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        item.Author.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        item.Category.toLowerCase().includes(searchQuery.toLowerCase())
-      : false
-  );
+  
 
   const resetForm = () => {
     setBookNumber("");
@@ -104,27 +71,43 @@ const BookList = () => {
     setCategory("");
   };
 
-  const handleDelete = (bookNumber) => {
-    // Handle delete action
-    alert("Delete book", bookNumber);
+  const handleDelete = async (ddcid, title) => {
+    try {
+      const { error } = await supabase
+        .from("books")
+        .delete()
+        .eq("ddcid", ddcid);
+      if (error) throw error;
+      setBookData(bookData.filter((item) => item.ddcid !== ddcid));
+      alert(`The book "${title}" is deleted.`);
+    } catch (error) {
+      console.error("Error deleting book:", error.message);
+    }
   };
 
-  const handleUpdate = (bookNumber) => {
+  const handleUpdate = (ddcid, title) => {
     // Handle update action
-    alert("Update book", bookNumber);
+    alert(`The book "${title}" with ID ${ddcid} is updated.`);
   };
 
-  const rowActions = (bookNumber) => [
-    { label: "Update", onClick: () => handleUpdate(bookNumber) },
-    { label: "Delete", onClick: () => handleDelete(bookNumber) },
+  const rowActions = (ddcid, title) => [
+    { label: "Update", onClick: () => handleUpdate(ddcid, title) },
+    { label: "Delete", onClick: () => handleDelete(ddcid, title) },
   ];
+
+  const filteredData = bookData.filter((item) =>
+    selectedCategory === "All" || item.category === selectedCategory
+      ? item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        item.author.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        item.category.toLowerCase().includes(searchQuery.toLowerCase())
+      : false
+  );
 
   return (
     <div className="px-3 flex-1">
       <div className="bg-white my-3 px-2 py-2 rounded-xl shadow-lg flex justify-between search-container">
         <div className="flex items-center w-full">
           <BiSearch className="text-3xl mx-2 my-2 sm:text-4xl" />
-
           <input
             type="text"
             placeholder="Search"
@@ -133,14 +116,14 @@ const BookList = () => {
             onChange={(e) => setSearchQuery(e.target.value)}
           />
         </div>
-
         <select
           id="category"
           name="category"
-          className="w-fit py-3 px-4 xl:ml-60 md:ml-32 bg-gray rounded-xl shadow-sm focus:outline-none focus:ring-maroon focus:border-maroon sm:text-sm category "
+          className="w-fit py-3 px-4 xl:ml-60 md:ml-32 bg-gray rounded-xl shadow-sm focus:outline-none focus:ring-maroon focus:border-maroon sm:text-sm category"
           value={selectedCategory}
           onChange={(e) => setSelectedCategory(e.target.value)}
         >
+          <option value="All">All</option>
           {categories.map((category) => (
             <option key={category} value={category}>
               {category}
@@ -165,7 +148,6 @@ const BookList = () => {
                 </div>
               </th>
             </tr>
-
             <tr className="text-left text-black text-xl border-b border-gray">
               <th className="px-5 py-4">DDC ID</th>
               <th className="px-5 py-4">Title of the book</th>
@@ -175,24 +157,24 @@ const BookList = () => {
               <th className="px-5 py-4">Action</th>
             </tr>
           </thead>
-
           <tbody>
-            {filteredData.map((item) => (
-              <tr key={item.BookNumber} className="border-b border-gray">
-                <td className="px-5 py-2">{item.BookNumber}</td>
-                <td className="px-5 py-2">{item.Title}</td>
-                <td className="px-5 py-2">{item.Author}</td>
-                <td className="px-5 py-2">{item.Category}</td>
+            {filteredData.map((item, index) => (
+              <tr key={index} className="border-b border-gray">
+                <td className="px-5 py-2">{item.ddcid}</td>
+                <td className="px-5 py-2">{item.title}</td>
+                <td className="px-5 py-2">{item.author}</td>
+                <td className="px-5 py-2">{item.category}</td>
                 <td
                   className={`px-1 py-2 text-center ${
-                    item.Status === "Available" ? "bg-green" : "bg-red"
-                  } m-2 inline-block rounded-xl text-sm w-3/4`}>
-                  {item.Status}
+                    item.status === true ? "bg-green" : "bg-red"
+                  } m-2 inline-block rounded-xl text-sm w-3/4`}
+                >
+                  {item.status ? "Available" : "Not Available"}
                 </td>
                 <td className="px-5">
                   <Dropdown
-                    options={rowActions(item.studentNumber)}
-                    onSelect={(option) => option.onClick(item.studentNumber)}
+                    options={rowActions(item.ddcid, item.title)}
+                    onSelect={(option) => option.onClick(item.ddcid, item.title)}
                   />
                 </td>
               </tr>
@@ -213,7 +195,6 @@ const BookList = () => {
             <h2 className="text-2xl font-bold mb-4 text-center">
               Book Information
             </h2>
-
             <div className="grid grid-cols-2 gap-10 ">
               <div className="flex flex-col w-72">
                 <label className="text-md">DDC ID</label>
@@ -224,7 +205,6 @@ const BookList = () => {
                   value={bookNumber}
                   onChange={(e) => setBookNumber(e.target.value)}
                 />
-
                 <label className="text-md">Title</label>
                 <input
                   type="text"
@@ -234,7 +214,6 @@ const BookList = () => {
                   onChange={(e) => setTitle(e.target.value)}
                 />
               </div>
-
               <div className="flex flex-col w-72">
                 <label className="text-md">Author</label>
                 <input
@@ -244,18 +223,21 @@ const BookList = () => {
                   value={author}
                   onChange={(e) => setAuthor(e.target.value)}
                 />
-
                 <label className="text-md">Category</label>
-                <input
-                  type="text"
-                  placeholder="Category"
-                  className="shadow-lg rounded-xl text-sm px-5 py-4 mb-4 w-full"
+                <select
                   value={category}
                   onChange={(e) => setCategory(e.target.value)}
-                />
+                  className="shadow-lg rounded-xl text-sm px-5 py-4 mb-4 w-full"
+                >
+                  <option value="">Select a category</option>
+                  {categories.map((cat) => (
+                    <option key={cat} value={cat}>
+                      {cat}
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
-
             <div className="flex justify-center pt-4">
               <button
                 className="bg-maroon text-white py-2 px-4 rounded-lg mr-2"
@@ -271,4 +253,4 @@ const BookList = () => {
   );
 };
 
-export default BookList
+export default BookList;
